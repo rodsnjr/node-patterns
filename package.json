@@ -1,0 +1,21 @@
+{
+  "name": "inversify-article",
+  "version": "0.0.1",
+  "description": "Recentemente temos utilizado muitos projetos menores com NodeJS. Como venho do mundo Java e [Spring](https://spring.io/) para desenvolvimento de Backends sempre estranhei o formato de desenvolvimento com NodeJS em respeito a padrões.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Rodney Sales Nogueira Jr",
+  "license": "ISC",
+  "dependencies": {
+    "@types/express": "^4.16.0",
+    "body-parser": "^1.18.3",
+    "expressjs": "^1.0.1",
+    "inversify": "^4.13.0",
+    "inversify-express-utils": "^6.1.0",
+    "mongodb": "^3.1.1",
+    "reflect-metadata": "^0.1.12",
+    "validator.ts": "^0.2.2"
+  }
+}
