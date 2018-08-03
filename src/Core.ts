@@ -1,22 +1,13 @@
+import "reflect-metadata"
 import { Container, interfaces } from "inversify";
 import * as bodyParser from 'body-parser';
 import { UserModule } from './UserModule';
 import { Validator } from "validator.ts/Validator";
-import { MongoClient, Db } from 'mongodb';
 import { InversifyExpressServer } from "inversify-express-utils";
-
-export const TYPES = {
-    Service: Symbol.for('Service'),
-    Repository: Symbol.for('Repository'),
-    Controller: Symbol.for('Controller'),
-    MongoDB: Symbol.for('MongoDB'),
-    Validator: Symbol.for('Validator'),
-}
-
-export interface Response<T> {
-    status: number,
-    body?: T
-}
+import { TYPES } from "./Types";
+import "./UserController";
+import { Db, MongoClient } from 'mongodb';
+import { resolve } from "url";
 
 export class UserApplication {
     
@@ -30,25 +21,29 @@ export class UserApplication {
         this.dbUrl = 'mongodb://localhost:27017/';
     }
 
-    public build() {
+    public async build() {
         this.container.load(UserModule);
 
         this.container.bind(TYPES.Validator)
-            .toConstantValue((context: interfaces.Context) => {
-                return new Validator();
-        });
-
+            .toConstantValue(new Validator());
+        const db = await this.buildDatabase();
+        this.container.bind(TYPES.MongoDB).toConstantValue(db);
+        this.buildServer();
     }
 
-    public buildDatabase() {
-        this.container.bind(TYPES.MongoDB)
-            .toConstantValue((context: interfaces.Context) => {
-                MongoClient.connect(this.dbUrl, function(err, db) {
-                });
-        });
+    private async buildDatabase() {
+        return new Promise((resolve, reject) => {
+            MongoClient.connect(this.dbUrl, function(err, db) {
+                if (err) {
+                    return reject(err);
+                }
+                const dbConnect = db.db('usersTutorial');
+                return resolve(dbConnect);
+            });
+        })
     }
 
-    public buildServer() {
+    private buildServer() {
         this.server = new InversifyExpressServer(this.container);
         this.server.setConfig((app) => {
             // add body parser
@@ -62,6 +57,7 @@ export class UserApplication {
     }
 
     public start() {
+        console.log('Server Start at 3000');
         this.serverApp.listen(3000);
     }
 }

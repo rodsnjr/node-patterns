@@ -1,16 +1,17 @@
-import { IsLength, IsEmail, IsDate } from "validator.ts/decorator/Validation";
+import { IsEmail, IsDate, MinLength } from "validator.ts/decorator/Validation";
 
 export class User {
  
-    @IsLength(4, 20)
+    @MinLength(3)
     name: string;
- 
+    
+    @MinLength(3)
     password: string;
  
     @IsEmail()
     email: string;
 
     @IsDate()
-    createDate: Date;
+    createDate: string;
  
 }

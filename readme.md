@@ -58,6 +58,7 @@ Isso é feito da seguinte maneira:
 
 ```typescript
 
+import "reflect-metadata"
 import { Container } from "inversify";
 import { TYPES } from "./types";
 
@@ -100,13 +101,11 @@ Dessa forma eu posso simplesmente definir em um arquivo especifico do módulo to
 
 ```typescript
 // UserModule.ts
-const usersModule = new ContainerModule((bind: interfaces.Bind, unbind: interfaces.Unbind) => {
+export const UserModule = new ContainerModule((bind: interfaces.Bind, unbind: interfaces.Unbind) => {
     bind<UserRepository>(TYPES.Repository).to(UserRepository);
     bind<UserService>(TYPES.Service).to(UserService);
-    bind<UserController>(TYPES.Controller).to(UserController);
 });
 
-export { usersModule };
 
 ```
 
@@ -137,18 +136,22 @@ Para a camada de repositório, como estamos utilizando os Containers, a gente po
 // UserRepository.ts
 
 @injectable()
-class UserRepository {
+export class UserRepository {
 
-    @inject(TYPES.MongoDB)
-    private db: any;
+    constructor(@inject(TYPES.MongoDB) private db: Db){}
 
-    public findOne(id): User {
-        return this.db.users.find({ _id: id });
+    public createOne(user: User): Promise<User> {
+        return new Promise<User>((resolve, reject) => {
+            this.db.collection('users').insertOne(user, (err, res) => {
+                if (err) {
+                    return reject(err);
+                }
+                return resolve(<User>res.ops[0]);
+            });
+        });
     }
 
-    public createOne(user: User) {
-        return this.db.users.insert(user);
-    }
+    // Demais Funções ...
 }
 
 ```
@@ -160,7 +163,7 @@ Lembrando que a responsabilidade da camada de Serviço é de garantir as regras 
 // UserService.ts
 
 @injectable()
-class UserService {
+export class UserService {
 
     @inject(TYPES.Validator)
     private validator: Validator;
@@ -168,26 +171,19 @@ class UserService {
     @inject(TYPES.Repository)
     private userRepository: UserRepository;
 
-    public findUser(id): Response<User> {
-        const user = this.userRepository.findOne(id);
-        
-        return {
-            status: user ? 200 : 404,
-            body: user || {}
-        }
-    }
-
-    public createUser(userData: any): Response<User> {
+    public async createUser(userData: any): Promise<Response<User>> {
         const user: User = new User();
+
         user.name = userData.name;
         user.password = userData.password;
         user.email = userData.email;
-        user.createData = userData.createDate;
-        
-        if (this.validator.isValid(user)) {
+        user.createDate = new Date().toDateString();
+            
+        if (this.validator.isValid(user, { skipMissingProperties: true })) {
+            const createdUser = await this.userRepository.createOne(user);
             return { 
                 status: 201,
-                body: this.userRepository.createOne(user)
+                body: createdUser
             };
         }
 
@@ -195,6 +191,8 @@ class UserService {
             status: 400
         };
     }
+
+    // Demais Funções ...
 }
 
 ```
@@ -206,25 +204,149 @@ Dessa forma o nosso `UserController` fica da seguinte maneira
 
 ```typescript
 
-@controller('/')
-export class UserController { 
+@controller('/user')
+export class UserController implements interfaces.Controller { 
     
     constructor(@inject(TYPES.Service) private userService: UserService) {}
 
-    @httpGet('/:id')
-    private find(req: Request, res: Response) {
-        const response = this.userService.createUser(req.body);
+    @httpGet('/')
+    private async findAll(req: Request, res: Response) {
+        console.log('find All Users');
+        const response = await this.userService.findUsers();
         return res.status(response.status).send(response.body);
     }
 
     @httpPost('/')
-    private create(req: Request, res: Response) {
-        const response = this.userService.findUser(req.params.id);
+    private async create(req: Request, res: Response) {
+        console.log('Create One User');
+        const response = await this.userService.createUser(req.body);
         return res.status(response.status).send(response.body);
+    }
+}
+```
+
+## Finalizando os Containers
+
+Por fim eu defino uma classe principal da aplicação, que irá conter cada modulo registrado em um container principal, bem como os objetos principais da aplicação (como o acesso ao BD).
+
+```typescript
+
+export class UserApplication {
+    
+    private container: Container;
+    private server: InversifyExpressServer;
+    private serverApp: any;
+    private dbUrl: string;
+
+    constructor() {
+        this.container = new Container();
+        this.dbUrl = 'mongodb://localhost:27017/';
+    }
+
+    public async build() {
+        this.container.load(UserModule);
+
+        this.container.bind(TYPES.Validator)
+            .toConstantValue(new Validator());
+        const db = await this.buildDatabase();
+        this.container.bind(TYPES.MongoDB).toConstantValue(db);
+        this.buildServer();
+    }
+
+    private async buildDatabase() {
+        return new Promise((resolve, reject) => {
+            MongoClient.connect(this.dbUrl, function(err, db) {
+                if (err) {
+                    return reject(err);
+                }
+                const dbConnect = db.db('usersTutorial');
+                return resolve(dbConnect);
+            });
+        })
+    }
+
+    private buildServer() {
+        this.server = new InversifyExpressServer(this.container);
+        this.server.setConfig((app) => {
+            // add body parser
+            app.use(bodyParser.urlencoded({
+                extended: true
+            }));
+            app.use(bodyParser.json());
+        });
+        
+        this.serverApp = this.server.build();
+    }
+
+    public start() {
+        console.log('Server Start at 3000');
+        this.serverApp.listen(3000);
     }
 }
 
 ```
 
-## Finalizando os Containers
+E por fim no script principal da aplicação eu inicializo minha classe `UserApplication`
 
+```typescript
+
+const userApp = new UserApplication();
+
+userApp.build().then(() => {
+    userApp.start();
+});
+
+```
+
+## Finalizando
+
+Ótimo, agora temos uma idéia de como organizar melhor nosso projeto, com cada objeto com sua responsabilidade, sem se preocupar com o ciclo de vida dos nossos objetos, organizando bem nossa aplicação em blocos bem definidos.
+
+Os últimos detalhes são, organizar a compilação e execução da aplicação. Outro ponto importante é que o `Inversify` necessita da `reflect-metadata`.
+
+Para ajustar a compilação do nosso projeto precisamos definir um `tsconfig.json` com alguns detalhes específicos do `Inversify`.
+
+```json
+
+{
+    "compilerOptions": {
+      "target": "es6",
+      "outDir": "dist",
+      "lib": ["es2017", "dom"],
+      "types": ["reflect-metadata"],
+      "module": "commonjs",
+      "moduleResolution": "node",
+      "experimentalDecorators": true,
+      "emitDecoratorMetadata": true,
+    },
+    "include": [
+      "src/**/*.ts",
+      "src/**/*.json"
+    ],
+    "exclude": [
+      "node_modules"
+    ]
+}
+
+```
+
+Essa configuração permite alguns módulos específicos úteis para trabalhar tanto com o `Validator.ts`, quanto com o `Inversify`.
+
+Por fim, para quem ainda não é familiarizado com o Typescript precisamos instalar ele como um pacote global, e usar o comando de compilação no nosso projeto.
+
+> npm install -g typescript
+> tsc
+
+Conforme a compilação definida no nosso `tsconfig.json` o nosso projeto vai ser gerado os arquivos na pasta `dist`, então podemos simplesmente rodar com.
+
+> node dist/Index.js
+
+Ou simplesmente definir em nosso `npm start`
+
+```json
+
+"scripts": {
+    "start": "tsc && node dist/Index.js"
+  }
+
+```

@@ -4,7 +4,8 @@
   "description": "Recentemente temos utilizado muitos projetos menores com NodeJS. Como venho do mundo Java e [Spring](https://spring.io/) para desenvolvimento de Backends sempre estranhei o formato de desenvolvimento com NodeJS em respeito a padrões.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "tsc && node dist/Index.js"
   },
   "author": "Rodney Sales Nogueira Jr",
   "license": "ISC",
