@@ -335,6 +335,9 @@ Essa configuração permite alguns módulos específicos úteis para trabalhar t
 Por fim, para quem ainda não é familiarizado com o Typescript precisamos instalar ele como um pacote global, e usar o comando de compilação no nosso projeto.
 
 > npm install -g typescript
+
+E depois para a compilação
+
 > tsc
 
 Conforme a compilação definida no nosso `tsconfig.json` o nosso projeto vai ser gerado os arquivos na pasta `dist`, então podemos simplesmente rodar com.
@@ -347,6 +350,8 @@ Ou simplesmente definir em nosso `npm start`
 
 "scripts": {
     "start": "tsc && node dist/Index.js"
-  }
+}
 
 ```
+
+Além disso existem algumas utilidades legais para auxiliar nos projetos, como por exemplo o uso do [Gulp](https://gulpjs.com/) e do [Nodemon](https://nodemon.io/), que também funcionam muito bem no [Typescript](https://www.typescriptlang.org/docs/handbook/gulp.html).
